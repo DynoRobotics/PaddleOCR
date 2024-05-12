@@ -25,6 +25,7 @@ from paddle import inference
 import time
 import random
 from ppocr.utils.logging import get_logger
+import json
 
 
 def str2bool(v):
@@ -147,6 +148,11 @@ def init_args():
 
     parser.add_argument("--show_log", type=str2bool, default=True)
     parser.add_argument("--use_onnx", type=str2bool, default=False)
+    parser.add_argument("--det_onnx_provider", type=str, default="CPUExecutionProvider")
+    parser.add_argument("--rec_onnx_provider", type=str, default="CPUExecutionProvider")
+    parser.add_argument("--det_delegate_options", type=json.loads, default=None)
+    parser.add_argument("--rec_delegate_options", type=json.loads, default=None)
+
     return parser
 
 
@@ -156,12 +162,18 @@ def parse_args():
 
 
 def create_predictor(args, mode, logger):
+    delegate_options = None
+    provider = "CPUExecutionProvider"
     if mode == "det":
         model_dir = args.det_model_dir
+        delegate_options = args.det_delegate_options
+        provider = args.det_onnx_provider
     elif mode == 'cls':
         model_dir = args.cls_model_dir
     elif mode == 'rec':
         model_dir = args.rec_model_dir
+        delegate_options = args.rec_delegate_options
+        provider = args.rec_onnx_provider
     elif mode == 'table':
         model_dir = args.table_model_dir
     elif mode == 'ser':
@@ -184,7 +196,11 @@ def create_predictor(args, mode, logger):
         if not os.path.exists(model_file_path):
             raise ValueError("not find model file path {}".format(
                 model_file_path))
-        sess = ort.InferenceSession(model_file_path)
+        sess = ort.InferenceSession(
+            model_file_path,
+            providers = [provider],
+            provider_options = [delegate_options] if delegate_options else None,
+        )
         return sess, sess.get_inputs()[0], None, None
 
     else:
